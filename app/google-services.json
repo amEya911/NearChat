@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "828668699818",
+    "project_id": "nearchat-928ae",
+    "storage_bucket": "nearchat-928ae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:828668699818:android:6ce459641efc5fddfe5cd3",
+        "android_client_info": {
+          "package_name": "com.example.nearchat"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "828668699818-7ni5rorki61i9d74fpmif27kin3075jv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBeOedGqzup5gLil_Lv31paKKn3ay7xv94"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "828668699818-7ni5rorki61i9d74fpmif27kin3075jv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:828668699818:android:77fb4a0b33926c44fe5cd3",
+        "android_client_info": {
+          "package_name": "eu.tutorials.nearchat"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "828668699818-r3kf8b7ur31hf8c58a3a4ei2b9ct9uon.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "eu.tutorials.nearchat",
+            "certificate_hash": "3619677c954a854b815d56a77e45131eba05757d"
+          }
+        },
+        {
+          "client_id": "828668699818-7ni5rorki61i9d74fpmif27kin3075jv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBeOedGqzup5gLil_Lv31paKKn3ay7xv94"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "828668699818-7ni5rorki61i9d74fpmif27kin3075jv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

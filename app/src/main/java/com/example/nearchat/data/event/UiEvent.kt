@@ -7,6 +7,7 @@ sealed class HomeUiEvent {
     data class PermissionsUpdated(val granted: Boolean) : HomeUiEvent()
     object AcceptConnection : HomeUiEvent()
     object DeclineConnection : HomeUiEvent()
+    object ProfileClicked : HomeUiEvent()
 }
 
 sealed class DeviceListUiEvent {
@@ -21,4 +22,14 @@ sealed class ChatUiEvent {
     object DisconnectClicked : ChatUiEvent()
     object DisconnectConfirmed : ChatUiEvent()
     object DisconnectDismissed : ChatUiEvent()
+}
+
+sealed class ProfileUiEvent {
+    data class NameChanged(val name: String) : ProfileUiEvent()
+    object SaveName : ProfileUiEvent()
+    object EditToggle : ProfileUiEvent()
+    object SignOutClicked : ProfileUiEvent()
+    object SignOutConfirmed : ProfileUiEvent()
+    object SignOutDismissed : ProfileUiEvent()
+    object BackPressed : ProfileUiEvent()
 }

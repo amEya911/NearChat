@@ -12,9 +12,24 @@ class LocalUserDataSource @Inject constructor(
 
     fun getDisplayName(): String? = prefs.getString("display_name", null)
 
-    fun setDisplayName(name: String) {
-        prefs.edit().putString("display_name", name).apply()
+    fun getUid(): String? = prefs.getString("uid", null)
+
+    fun getEmail(): String? = prefs.getString("email", null)
+
+    fun saveSession(uid: String, email: String, displayName: String) {
+        prefs.edit()
+            .putString("uid", uid)
+            .putString("email", email)
+            .putString("display_name", displayName)
+            .apply()
     }
 
-    fun hasProfile(): Boolean = !getDisplayName().isNullOrBlank()
+    fun clearSession() {
+        prefs.edit().clear().apply()
+    }
+
+    fun isLoggedIn(): Boolean = !getUid().isNullOrBlank() && !getDisplayName().isNullOrBlank()
+
+    // Keep backward compat — used by BluetoothDataSource
+    fun hasProfile(): Boolean = isLoggedIn()
 }

@@ -17,20 +17,21 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.nearchat.data.datasource.LocalUserDataSource
 import com.example.nearchat.data.event.HomeUiEvent
+import com.example.nearchat.ui.screen.AuthScreen
 import com.example.nearchat.ui.screen.ChatScreen
 import com.example.nearchat.ui.screen.DeviceListScreen
 import com.example.nearchat.ui.screen.HomeScreen
-import com.example.nearchat.ui.screen.OnboardingScreen
+import com.example.nearchat.ui.viewmodel.AuthViewModel
 import com.example.nearchat.ui.viewmodel.ChatViewModel
 import com.example.nearchat.ui.viewmodel.DeviceListViewModel
 import com.example.nearchat.ui.viewmodel.HomeViewModel
-import com.example.nearchat.ui.viewmodel.OnboardingViewModel
 
 sealed class Screen(val route: String) {
-    object Onboarding : Screen("onboarding")
+    object Auth : Screen("auth")
     object Home : Screen("home")
     object DeviceList : Screen("device_list")
     object Chat : Screen("chat")
+    object Profile : Screen("profile")
 }
 
 sealed class UiEffect {
@@ -39,7 +40,6 @@ sealed class UiEffect {
     data class ShowSnackbar(val message: String) : UiEffect()
     data class ShowDialog(val message: String) : UiEffect()
     object TriggerHaptic : UiEffect()
-    // Asks Android to make this device discoverable so other phones can find it during scanning
     object RequestDiscoverable : UiEffect()
 }
 
@@ -48,11 +48,11 @@ fun AppNavigation(
     localUserDataSource: LocalUserDataSource,
     navController: NavHostController = rememberNavController()
 ) {
-    // Dynamic start destination — onboarding if no profile, home if profile exists
-    val startDestination = if (localUserDataSource.hasProfile()) {
+    // Dynamic start destination — auth if not logged in, home if session exists
+    val startDestination = if (localUserDataSource.isLoggedIn()) {
         Screen.Home.route
     } else {
-        Screen.Onboarding.route
+        Screen.Auth.route
     }
 
     // Shared HomeViewModel scoped to the Activity
@@ -76,9 +76,6 @@ fun AppNavigation(
                     navController.popBackStack(Screen.Home.route, false)
                 }
                 is UiEffect.RequestDiscoverable -> {
-                    // REQUEST_DISCOVERABLE shows a system dialog asking the user to allow
-                    // the device to be visible to other Bluetooth scanners for 5 minutes.
-                    // Without this, startDiscovery() on the other phone won't find this device.
                     val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
                         putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
                     }
@@ -114,8 +111,8 @@ fun AppNavigation(
         navController = navController,
         startDestination = startDestination
     ) {
-        composable(Screen.Onboarding.route) {
-            val viewModel: OnboardingViewModel = hiltViewModel()
+        composable(Screen.Auth.route) {
+            val viewModel: AuthViewModel = hiltViewModel()
             val state by viewModel.state.collectAsState()
 
             LaunchedEffect(Unit) {
@@ -123,7 +120,7 @@ fun AppNavigation(
                     when (effect) {
                         is UiEffect.NavigateTo -> {
                             navController.navigate(effect.screen.route) {
-                                popUpTo(Screen.Onboarding.route) { inclusive = true }
+                                popUpTo(Screen.Auth.route) { inclusive = true }
                             }
                         }
                         else -> {}
@@ -131,7 +128,7 @@ fun AppNavigation(
                 }
             }
 
-            OnboardingScreen(
+            AuthScreen(
                 state = state,
                 onEvent = viewModel::onEvent
             )
@@ -192,6 +189,30 @@ fun AppNavigation(
             }
 
             ChatScreen(
+                state = state,
+                onEvent = viewModel::onEvent
+            )
+        }
+
+        composable(Screen.Profile.route) {
+            val viewModel: com.example.nearchat.ui.viewmodel.ProfileViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsState()
+
+            LaunchedEffect(Unit) {
+                viewModel.effect.collect { effect ->
+                    when (effect) {
+                        is UiEffect.NavigateBack -> navController.popBackStack()
+                        is UiEffect.NavigateTo -> {
+                            navController.navigate(effect.screen.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            com.example.nearchat.ui.screen.ProfileScreen(
                 state = state,
                 onEvent = viewModel::onEvent
             )

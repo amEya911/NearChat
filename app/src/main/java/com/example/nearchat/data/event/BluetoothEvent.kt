@@ -11,7 +11,4 @@ sealed class BluetoothEvent {
     data class MessageReceived(val text: String) : BluetoothEvent()
     object Disconnected : BluetoothEvent()
     data class Error(val message: String) : BluetoothEvent()
-    // Name probe events
-    data class DeviceNameResolved(val address: String, val resolvedName: String) : BluetoothEvent()
-    data class DeviceProbeComplete(val address: String) : BluetoothEvent()
 }

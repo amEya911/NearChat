@@ -47,11 +47,10 @@ class BluetoothDataSource @Inject constructor(
         private const val HANDSHAKE_DECLINE = "NEARCHAT_DECLINE"
         private const val HANDSHAKE_TIMEOUT_MS = 30_000L
 
-        // Name probe — used to check if a device has NearChat installed
-        // and to get their display name, all before the user taps Connect
-        private const val NAME_PROBE_REQUEST = "NEARCHAT_PROBE"
-        private const val NAME_PROBE_RESPONSE_PREFIX = "NEARCHAT_NAME:"
-        private const val NAME_PROBE_TIMEOUT_MS = 8_000L
+        // Identity prefix used to broadcast that this device runs NearChat.
+        // Format: "[NC]DisplayName" — e.g. "[NC]Ameya"
+        // During discovery, only devices whose BT name starts with this prefix are shown.
+        const val IDENTITY_PREFIX = "[NC]"
     }
 
     private val bluetoothManager: BluetoothManager? =
@@ -66,6 +65,9 @@ class BluetoothDataSource @Inject constructor(
     private var inputStream: InputStream? = null
     private var outputStream: OutputStream? = null
 
+    var currentDevice: BtDevice? = null
+        private set
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var serverJob: Job? = null
     private var readJob: Job? = null
@@ -74,6 +76,9 @@ class BluetoothDataSource @Inject constructor(
     private var discoveryFinishedReceiver: BroadcastReceiver? = null
 
     private var pendingDevice: BtDevice? = null
+
+    // Store the original BT adapter name so we can restore it later
+    private var originalAdapterName: String? = null
 
     val isBluetoothEnabled: Boolean
         get() = bluetoothAdapter?.isEnabled == true
@@ -88,9 +93,7 @@ class BluetoothDataSource @Inject constructor(
 
     // ─────────────────────────────────────────────────────────────────────────
     // SERVER — always running on both devices from app launch
-    // Handles two types of incoming connections:
-    //   1. NEARCHAT_PROBE  → name probe, respond and restart
-    //   2. NEARCHAT_REQUEST → real connection request, wait for user to accept/decline
+    // Handles incoming RFCOMM connections for the handshake protocol.
     // ─────────────────────────────────────────────────────────────────────────
 
     @SuppressLint("MissingPermission")
@@ -107,14 +110,19 @@ class BluetoothDataSource @Inject constructor(
                 try { serverSocket?.close() } catch (_: IOException) {}
                 serverSocket = null
 
-                // Use temp streams — don't assign to connectedSocket yet
-                // until we know this is a real connection (not a probe)
                 val tempInput = socket.inputStream
                 val tempOutput = socket.outputStream
 
                 val remoteDevice = socket.remoteDevice
+                val rawName = try { remoteDevice.name ?: "Unknown" } catch (_: SecurityException) { "Unknown" }
+                // Strip [NC] prefix if present to get the clean display name
+                val displayName = if (rawName.startsWith(IDENTITY_PREFIX)) {
+                    rawName.removePrefix(IDENTITY_PREFIX).trim()
+                } else {
+                    rawName
+                }
                 val btDevice = BtDevice(
-                    name = try { remoteDevice.name ?: "Unknown" } catch (_: SecurityException) { "Unknown" },
+                    name = displayName,
                     address = remoteDevice.address
                 )
 
@@ -134,29 +142,8 @@ class BluetoothDataSource @Inject constructor(
                 Log.d(TAG, "Server received: $message")
 
                 when {
-                    message == NAME_PROBE_REQUEST -> {
-                        // ── PROBE ──
-                        // Someone is scanning and checking if we have NearChat.
-                        // Respond with our display name, close, restart server.
-                        val myName = localUserDataSource.getDisplayName() ?: localDeviceName
-                        val response = "$NAME_PROBE_RESPONSE_PREFIX$myName"
-                        try {
-                            tempOutput.write(response.toByteArray(Charsets.UTF_8))
-                            tempOutput.flush()
-                            Log.d(TAG, "Probe response sent: $response")
-                            delay(300) // give remote side time to read before we close
-                        } catch (e: IOException) {
-                            Log.e(TAG, "Failed to write probe response: ${e.message}")
-                        } finally {
-                            try { socket.close() } catch (_: IOException) {}
-                        }
-                        // Restart immediately so we're ready for the next probe or real connection
-                        startServer()
-                    }
-
                     message.startsWith(HANDSHAKE_REQUEST_PREFIX) -> {
                         // ── REAL CONNECTION REQUEST ──
-                        // Assign to persistent streams now — this is a real chat connection
                         connectedSocket = socket
                         inputStream = tempInput
                         outputStream = tempOutput
@@ -165,11 +152,9 @@ class BluetoothDataSource @Inject constructor(
                         pendingDevice = btDevice.copy(name = requesterName.ifBlank { btDevice.name })
                         Log.d(TAG, "Connection requested by: $requesterName")
                         _events.emit(BluetoothEvent.ConnectionRequested(requesterName))
-                        // Do NOT restart server here — waiting for accept/decline
                     }
 
                     else -> {
-                        // Unknown — not a NearChat device, close and keep listening
                         Log.w(TAG, "Unknown message, ignoring: $message")
                         try { socket.close() } catch (_: IOException) {}
                         startServer()
@@ -195,6 +180,7 @@ class BluetoothDataSource @Inject constructor(
                 val device = pendingDevice
                 pendingDevice = null
                 if (device != null) {
+                    currentDevice = device
                     _events.emit(BluetoothEvent.Connected(device))
                     startReadLoop()
                 }
@@ -221,6 +207,7 @@ class BluetoothDataSource @Inject constructor(
 
     // ─────────────────────────────────────────────────────────────────────────
     // DISCOVERY
+    // Filters results to only show devices broadcasting the [NC] identity prefix.
     // ─────────────────────────────────────────────────────────────────────────
 
     @SuppressLint("MissingPermission")
@@ -244,12 +231,22 @@ class BluetoothDataSource @Inject constructor(
                             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                         }
                     device?.let {
-                        val name = intent.getStringExtra(BluetoothDevice.EXTRA_NAME)
+                        val rawName = intent.getStringExtra(BluetoothDevice.EXTRA_NAME)
                             ?: try { it.name } catch (_: SecurityException) { null }
-                            ?: "Device (${it.address.takeLast(5)})"
-                        _events.tryEmit(
-                            BluetoothEvent.DeviceFound(BtDevice(name = name, address = it.address))
-                        )
+
+                        // Only show devices broadcasting the NearChat identity prefix.
+                        if (rawName != null && rawName.startsWith(IDENTITY_PREFIX)) {
+                            val displayName = rawName.removePrefix(IDENTITY_PREFIX).trim()
+                            if (displayName.isNotBlank()) {
+                                _events.tryEmit(
+                                    BluetoothEvent.DeviceFound(
+                                        BtDevice(name = displayName, address = it.address)
+                                    )
+                                )
+                            }
+                        } else {
+                            Log.d(TAG, "Filtered out non-NearChat device: ${rawName ?: it.address}")
+                        }
                     }
                 }
             }
@@ -288,69 +285,6 @@ class BluetoothDataSource @Inject constructor(
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // NAME PROBE
-    // Called after DiscoveryFinished for each found device.
-    // At this point the BT radio is idle (not scanning), so connect() works.
-    //
-    // DO NOT call cancelServer() here. If both phones scan and find each other,
-    // they will both probe simultaneously. cancelServer() would cause a deadlock:
-    // each phone tears down its own server → neither has a server → both probes
-    // fail with "connection refused" → both show "No NearChat users found."
-    //
-    // The server socket (listen) and probe socket (connect to a different device)
-    // are independent — they do not conflict with each other.
-    // ─────────────────────────────────────────────────────────────────────────
-
-    @SuppressLint("MissingPermission")
-    fun probeDeviceName(device: BtDevice) {
-        scope.launch {
-            var probeSocket: BluetoothSocket? = null
-            try {
-                val bluetoothDevice = bluetoothAdapter?.getRemoteDevice(device.address)
-                probeSocket = bluetoothDevice?.createRfcommSocketToServiceRecord(APP_UUID)
-
-                val resolvedName = withTimeoutOrNull(NAME_PROBE_TIMEOUT_MS) {
-                    probeSocket?.connect()
-                    Log.d(TAG, "Probe connected to ${device.address}")
-
-                    probeSocket?.outputStream?.write(NAME_PROBE_REQUEST.toByteArray(Charsets.UTF_8))
-                    probeSocket?.outputStream?.flush()
-
-                    val buffer = ByteArray(256)
-                    val bytesRead = probeSocket?.inputStream?.read(buffer) ?: -1
-                    Log.d(TAG, "Probe read $bytesRead bytes from ${device.address}")
-
-                    if (bytesRead > 0) {
-                        val response = String(buffer, 0, bytesRead, Charsets.UTF_8).trim()
-                        if (response.startsWith(NAME_PROBE_RESPONSE_PREFIX)) {
-                            response.removePrefix(NAME_PROBE_RESPONSE_PREFIX).trim()
-                        } else null
-                    } else null
-                }
-
-                if (resolvedName != null) {
-                    Log.d(TAG, "Probe resolved: ${device.address} → $resolvedName")
-                    _events.emit(BluetoothEvent.DeviceNameResolved(
-                        address = device.address,
-                        resolvedName = resolvedName
-                    ))
-                } else {
-                    Log.d(TAG, "Probe: ${device.address} is not a NearChat device")
-                }
-
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.d(TAG, "Probe failed for ${device.address}: ${e.message}")
-            } finally {
-                try { probeSocket?.close() } catch (_: IOException) {}
-                _events.emit(BluetoothEvent.DeviceProbeComplete(device.address))
-            }
-        }
-    }
-
-
-    // ─────────────────────────────────────────────────────────────────────────
     // CONNECT (Device A taps a NearChat device in the list)
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -358,8 +292,9 @@ class BluetoothDataSource @Inject constructor(
     fun connect(device: BtDevice) {
         scope.launch {
             try {
-                // Cancel server before connecting — same reason as in probeDeviceName()
-                cancelServer()
+                // Stop discovery before connecting — the BT radio can't scan and connect
+                // simultaneously. Do NOT cancel the server — it must stay up so the other
+                // device can still connect to us if they also initiate.
                 stopDiscovery()
                 delay(500)
 
@@ -367,7 +302,6 @@ class BluetoothDataSource @Inject constructor(
                 val socket = bluetoothDevice?.createRfcommSocketToServiceRecord(APP_UUID)
                     ?: run {
                         _events.emit(BluetoothEvent.Error("Could not create socket"))
-                        startServer()
                         return@launch
                     }
 
@@ -375,6 +309,9 @@ class BluetoothDataSource @Inject constructor(
                 connectedSocket = socket
                 inputStream = socket.inputStream
                 outputStream = socket.outputStream
+
+                // Cancel server now that we have an active connection
+                cancelServer()
 
                 val displayName = localUserDataSource.getDisplayName() ?: localDeviceName
                 val request = "$HANDSHAKE_REQUEST_PREFIX$displayName"
@@ -392,9 +329,9 @@ class BluetoothDataSource @Inject constructor(
 
                 when (response) {
                     HANDSHAKE_ACCEPT -> {
+                        currentDevice = device
                         _events.emit(BluetoothEvent.Connected(device))
                         startReadLoop()
-                        // Do NOT restart server — we're in a chat session now
                     }
                     HANDSHAKE_DECLINE -> {
                         _events.emit(BluetoothEvent.Error("${device.name} declined the connection"))
@@ -477,6 +414,7 @@ class BluetoothDataSource @Inject constructor(
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun closeSocket() {
+        currentDevice = null
         try { inputStream?.close() } catch (_: IOException) {}
         inputStream = null
         try { outputStream?.close() } catch (_: IOException) {}
@@ -496,7 +434,6 @@ class BluetoothDataSource @Inject constructor(
         serverSocket = null
         stopDiscovery()
         _events.tryEmit(BluetoothEvent.Disconnected)
-        // ChatViewModel should call startServer() after handling Disconnected event
     }
 
     fun cancelServer() {
@@ -507,15 +444,48 @@ class BluetoothDataSource @Inject constructor(
         serverSocket = null
     }
 
+    /**
+     * Sets the Bluetooth adapter name to "[NC]DisplayName" so other NearChat
+     * devices can identify us during discovery without any server-side lookup.
+     */
     @SuppressLint("MissingPermission")
     private fun updateAdapterName() {
         try {
-            val name = localUserDataSource.getDisplayName()
-            if (!name.isNullOrBlank() && bluetoothAdapter?.name != name) {
-                bluetoothAdapter?.name = name
+            val displayName = localUserDataSource.getDisplayName() ?: return
+            val identityName = "$IDENTITY_PREFIX$displayName"
+
+            // Save original name if we haven't yet
+            if (originalAdapterName == null) {
+                val currentName = bluetoothAdapter?.name
+                if (currentName != null && !currentName.startsWith(IDENTITY_PREFIX)) {
+                    originalAdapterName = currentName
+                }
+            }
+
+            if (bluetoothAdapter?.name != identityName) {
+                bluetoothAdapter?.name = identityName
+                Log.d(TAG, "Adapter name set to: $identityName")
             }
         } catch (e: SecurityException) {
             Log.e(TAG, "Cannot set bluetooth name: ${e.message}")
+        }
+    }
+
+    /**
+     * Restores the original Bluetooth adapter name (before NearChat modified it).
+     * Called on sign-out.
+     */
+    @SuppressLint("MissingPermission")
+    fun restoreAdapterName() {
+        try {
+            val original = originalAdapterName ?: return
+            if (bluetoothAdapter?.name != original) {
+                bluetoothAdapter?.name = original
+                Log.d(TAG, "Adapter name restored to: $original")
+            }
+            originalAdapterName = null
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Cannot restore bluetooth name: ${e.message}")
         }
     }
 }

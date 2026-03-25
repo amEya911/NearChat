@@ -2,61 +2,75 @@ package com.example.nearchat.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary Bluetooth-themed palette
-val BluetoothBlue = Color(0xFF1A73E8)
-val BluetoothBlueLight = Color(0xFF4A9AF5)
-val BluetoothBlueDark = Color(0xFF0D47A1)
+// ─── Brand Palette ───────────────────────────────────────────────────────────
+val NearChatPurple = Color(0xFF6C63FF)
+val NearChatPurpleLight = Color(0xFF9D97FF)
+val NearChatPurpleDark = Color(0xFF4A42D4)
 
-// Chat bubble colors
-val BubbleMine = Color(0xFF00897B)
-val BubbleMineLight = Color(0xFF4DB6AC)
-val BubbleTheirs = Color(0xFF2C2C2C)
-val BubbleTheirsLight = Color(0xFFE0E0E0)
+val NearChatCyan = Color(0xFF00D9FF)
+val NearChatGreen = Color(0xFF00E676)
+val NearChatAmber = Color(0xFFFFD740)
+val NearChatRed = Color(0xFFFF5252)
 
-// Neutral colors
-val NeutralDark = Color(0xFF121212)
-val NeutralDarkSurface = Color(0xFF1E1E1E)
-val NeutralDarkCard = Color(0xFF2A2A2A)
-val NeutralLight = Color(0xFFF5F5F5)
-val NeutralLightSurface = Color(0xFFFFFFFF)
+// ─── Dark Mode ───────────────────────────────────────────────────────────────
+val DarkBackground = Color(0xFF0A0E21)
+val DarkSurface = Color(0xFF1A1F36)
+val DarkSurfaceVariant = Color(0xFF252A40)
+val DarkSurfaceHigh = Color(0xFF2E3450)
+val DarkOnBackground = Color(0xFFE8EAF6)
+val DarkOnSurface = Color(0xFFE0E0E0)
+val DarkOnSurfaceVariant = Color(0xFF9E9EAF)
 
-// Accent colors
-val AccentGreen = Color(0xFF4CAF50)
-val AccentRed = Color(0xFFE53935)
-val AccentAmber = Color(0xFFFFB300)
-
-// M3 dark scheme colors
-val DarkPrimary = BluetoothBlue
+val DarkPrimary = NearChatPurple
 val DarkOnPrimary = Color.White
-val DarkPrimaryContainer = Color(0xFF004BA0)
-val DarkOnPrimaryContainer = Color(0xFFD1E4FF)
-val DarkSecondary = BubbleMine
-val DarkOnSecondary = Color.White
-val DarkSecondaryContainer = Color(0xFF00695C)
-val DarkOnSecondaryContainer = Color(0xFFB2DFDB)
-val DarkBackground = NeutralDark
-val DarkOnBackground = Color(0xFFE6E6E6)
-val DarkSurface = NeutralDarkSurface
-val DarkOnSurface = Color(0xFFE6E6E6)
-val DarkSurfaceVariant = NeutralDarkCard
-val DarkOnSurfaceVariant = Color(0xFFCAC4D0)
-val DarkError = Color(0xFFCF6679)
-val DarkOnError = Color.Black
+val DarkPrimaryContainer = Color(0xFF3A35A0)
+val DarkOnPrimaryContainer = Color(0xFFE0DEFF)
+val DarkSecondary = NearChatCyan
+val DarkOnSecondary = Color(0xFF003544)
+val DarkSecondaryContainer = Color(0xFF004D63)
+val DarkOnSecondaryContainer = Color(0xFFB3F0FF)
+val DarkTertiary = NearChatGreen
+val DarkOnTertiary = Color(0xFF003300)
+val DarkError = Color(0xFFFF6B6B)
+val DarkOnError = Color(0xFF370000)
+val DarkOutline = Color(0xFF404565)
 
-// M3 light scheme colors
-val LightPrimary = BluetoothBlue
+// ─── Light Mode ──────────────────────────────────────────────────────────────
+val LightBackground = Color(0xFFF5F5FA)
+val LightSurface = Color(0xFFFFFFFF)
+val LightSurfaceVariant = Color(0xFFEEEDF5)
+val LightOnBackground = Color(0xFF1A1A2E)
+val LightOnSurface = Color(0xFF1A1A2E)
+val LightOnSurfaceVariant = Color(0xFF5E5C71)
+
+val LightPrimary = NearChatPurple
 val LightOnPrimary = Color.White
-val LightPrimaryContainer = Color(0xFFD1E4FF)
-val LightOnPrimaryContainer = Color(0xFF001D36)
-val LightSecondary = BubbleMine
+val LightPrimaryContainer = Color(0xFFE0DEFF)
+val LightOnPrimaryContainer = Color(0xFF1A0073)
+val LightSecondary = Color(0xFF00ACC1)
 val LightOnSecondary = Color.White
-val LightSecondaryContainer = Color(0xFFB2DFDB)
-val LightOnSecondaryContainer = Color(0xFF00251A)
-val LightBackground = NeutralLight
-val LightOnBackground = Color(0xFF1C1B1F)
-val LightSurface = NeutralLightSurface
-val LightOnSurface = Color(0xFF1C1B1F)
-val LightSurfaceVariant = Color(0xFFE7E0EC)
-val LightOnSurfaceVariant = Color(0xFF49454F)
-val LightError = Color(0xFFB3261E)
+val LightSecondaryContainer = Color(0xFFB3F0FF)
+val LightOnSecondaryContainer = Color(0xFF001F26)
+val LightTertiary = Color(0xFF00C853)
+val LightOnTertiary = Color.White
+val LightError = Color(0xFFD32F2F)
 val LightOnError = Color.White
+val LightOutline = Color(0xFFC4C3D0)
+
+// ─── Chat Bubble Colors ─────────────────────────────────────────────────────
+val BubbleSentDark = NearChatPurple
+val BubbleSentLight = NearChatPurple
+val BubbleReceivedDark = DarkSurfaceVariant
+val BubbleReceivedLight = LightSurfaceVariant
+val BubbleTextSent = Color.White
+val BubbleTimeSent = Color.White.copy(alpha = 0.7f)
+val BubbleTextReceivedDark = Color(0xFFE0E0E0)
+val BubbleTimeReceivedDark = Color(0xFF9E9EAF)
+val BubbleTextReceivedLight = Color(0xFF1A1A2E)
+val BubbleTimeReceivedLight = Color(0xFF5E5C71)
+
+// Legacy aliases for compatibility
+val BubbleMine = BubbleSentDark
+val BubbleMineLight = BubbleSentLight
+val BubbleTheirs = BubbleReceivedDark
+val BubbleTheirsLight = BubbleReceivedLight

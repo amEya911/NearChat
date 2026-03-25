@@ -1,84 +1,112 @@
 package com.example.nearchat.ui.component
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.nearchat.data.model.Message
-import com.example.nearchat.ui.theme.BubbleMine
-import com.example.nearchat.ui.theme.BubbleMineLight
-import com.example.nearchat.ui.theme.BubbleTheirs
-import com.example.nearchat.ui.theme.BubbleTheirsLight
-import com.example.nearchat.util.formatTime
-import androidx.compose.foundation.isSystemInDarkTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun MessageBubble(
     message: Message,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
-    val bubbleColor = if (message.isMine) {
-        BubbleMine
+    val isMine = message.isMine
+
+    val backgroundColor = if (isMine) {
+        MaterialTheme.colorScheme.primary
     } else {
-        if (isDark) BubbleTheirs else BubbleTheirsLight
-    }
-    val textColor = if (message.isMine) {
-        Color.White
-    } else {
-        if (isDark) Color.White else Color.Black
-    }
-    val timeColor = if (message.isMine) {
-        Color.White.copy(alpha = 0.7f)
-    } else {
-        if (isDark) Color.White.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.5f)
+        MaterialTheme.colorScheme.surfaceVariant
     }
 
-    val bubbleShape = if (message.isMine) {
-        RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
+    val textColor = if (isMine) {
+        MaterialTheme.colorScheme.onPrimary
     } else {
-        RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
+        MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = if (message.isMine) Arrangement.End else Arrangement.Start
+    val timeColor = if (isMine) {
+        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+    }
+
+    val shape = if (isMine) {
+        RoundedCornerShape(
+            topStart = 24.dp,
+            topEnd = 24.dp,
+            bottomStart = 24.dp,
+            bottomEnd = 4.dp
+        )
+    } else {
+        RoundedCornerShape(
+            topStart = 24.dp,
+            topEnd = 24.dp,
+            bottomStart = 4.dp,
+            bottomEnd = 24.dp
+        )
+    }
+
+    Box(
+        modifier = modifier,
+        contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        Box(
+        Surface(
+            shape = shape,
+            color = backgroundColor,
             modifier = Modifier
                 .widthIn(max = 280.dp)
-                .clip(bubbleShape)
-                .background(bubbleColor)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .shadow(
+                    elevation = if (isMine) 2.dp else 1.dp,
+                    shape = shape,
+                    clip = true
+                )
         ) {
-            Column {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
                 Text(
                     text = message.text,
                     color = textColor,
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(bottom = 2.dp)
                 )
-                Text(
-                    text = formatTime(message.timestamp),
-                    color = timeColor,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.align(Alignment.End)
-                )
+                
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = formatTime(message.timestamp),
+                        color = timeColor,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }
+}
+
+private fun formatTime(timestamp: Long): String {
+    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    return sdf.format(Date(timestamp))
 }

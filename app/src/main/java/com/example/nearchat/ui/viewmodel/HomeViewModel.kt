@@ -104,6 +104,11 @@ class HomeViewModel @Inject constructor(
                     startServerIfNeeded()
                 }
             }
+            is HomeUiEvent.ProfileClicked -> {
+                viewModelScope.launch {
+                    _effect.emit(UiEffect.NavigateTo(Screen.Profile))
+                }
+            }
             is HomeUiEvent.AcceptConnection -> {
                 bluetoothDataSource.acceptConnection()
                 _state.update { it.copy(incomingRequest = null) }

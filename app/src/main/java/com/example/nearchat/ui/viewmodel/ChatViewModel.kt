@@ -32,6 +32,7 @@ class ChatViewModel @Inject constructor(
     val effect: SharedFlow<UiEffect> = _effect.asSharedFlow()
 
     init {
+        _state.update { it.copy(connectedDevice = bluetoothDataSource.currentDevice) }
         viewModelScope.launch {
             bluetoothDataSource.events.collect { event ->
                 when (event) {

@@ -143,6 +143,11 @@ class HomeViewModel @Inject constructor(
                     _effect.emit(UiEffect.NavigateTo(Screen.Profile))
                 }
             }
+            is HomeUiEvent.CreateGroupClicked -> {
+                viewModelScope.launch {
+                    _effect.emit(UiEffect.NavigateTo(Screen.GroupLobby))
+                }
+            }
             is HomeUiEvent.AcceptConnection -> {
                 bluetoothDataSource.acceptConnection()
                 _state.update { it.copy(incomingRequest = null) }

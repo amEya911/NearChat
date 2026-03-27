@@ -32,6 +32,8 @@ sealed class Screen(val route: String) {
     object DeviceList : Screen("device_list")
     object Chat : Screen("chat")
     object Profile : Screen("profile")
+    object GroupLobby : Screen("group_lobby")
+    object GroupChat : Screen("group_chat")
 }
 
 sealed class UiEffect {
@@ -213,6 +215,58 @@ fun AppNavigation(
             }
 
             com.example.nearchat.ui.screen.ProfileScreen(
+                state = state,
+                onEvent = viewModel::onEvent
+            )
+        }
+
+        composable(Screen.GroupLobby.route) {
+            val viewModel: com.example.nearchat.ui.viewmodel.GroupLobbyViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsState()
+
+            LaunchedEffect(Unit) {
+                viewModel.effect.collect { effect ->
+                    when (effect) {
+                        is UiEffect.NavigateTo -> {
+                            navController.navigate(effect.screen.route) {
+                                popUpTo(Screen.Home.route) { inclusive = false }
+                            }
+                        }
+                        is UiEffect.NavigateBack -> {
+                            navController.popBackStack(Screen.Home.route, false)
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            com.example.nearchat.ui.screen.GroupLobbyScreen(
+                state = state,
+                onEvent = viewModel::onEvent
+            )
+        }
+
+        composable(Screen.GroupChat.route) {
+            val viewModel: com.example.nearchat.ui.viewmodel.GroupChatViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsState()
+
+            LaunchedEffect(Unit) {
+                viewModel.effect.collect { effect ->
+                    when (effect) {
+                        is UiEffect.NavigateTo -> {
+                            navController.navigate(effect.screen.route) {
+                                popUpTo(Screen.Home.route) { inclusive = false }
+                            }
+                        }
+                        is UiEffect.NavigateBack -> {
+                            navController.popBackStack(Screen.Home.route, false)
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            com.example.nearchat.ui.screen.GroupChatScreen(
                 state = state,
                 onEvent = viewModel::onEvent
             )

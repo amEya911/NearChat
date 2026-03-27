@@ -159,13 +159,48 @@ fun DeviceListScreen(
                     items(state.devices, key = { it.address }) { device ->
                         DeviceItem(
                             device = device,
-                            onClick = { onEvent(DeviceListUiEvent.ConnectToDevice(device)) },
+                            onClick = { onEvent(DeviceListUiEvent.DeviceClicked(device)) },
                             cooldownEndTime = state.cooldowns[device.address]
                         )
                     }
                 }
             }
             
+            // Connection Options Dialog
+            if (state.selectedDeviceForOptions != null) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { onEvent(DeviceListUiEvent.DismissConnectionOptions) },
+                    title = {
+                        androidx.compose.material3.Text(
+                            "Connect to ${state.selectedDeviceForOptions.name ?: "Unknown Device"}"
+                        )
+                    },
+                    text = {
+                        androidx.compose.material3.Text(
+                            "How would you like to connect? If the user is hosting a group, join it. Otherwise, start a 1:1 chat."
+                        )
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                onEvent(DeviceListUiEvent.ConnectToDevice(state.selectedDeviceForOptions, asGroup = false))
+                            }
+                        ) {
+                            androidx.compose.material3.Text("1:1 Chat")
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                onEvent(DeviceListUiEvent.ConnectToDevice(state.selectedDeviceForOptions, asGroup = true))
+                            }
+                        ) {
+                            androidx.compose.material3.Text("Join Group")
+                        }
+                    }
+                )
+            }
+
             // Connecting Overlay
             if (state.isConnecting) {
                 Box(

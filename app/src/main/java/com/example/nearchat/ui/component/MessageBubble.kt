@@ -83,6 +83,19 @@ fun MessageBubble(
             Column(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
+                // Show sender name for group chat messages (non-mine only)
+                if (!isMine && message.senderName != null) {
+                    Text(
+                        text = message.senderName,
+                        color = if (message.senderName == "System")
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        else
+                            MaterialTheme.colorScheme.tertiary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
                 Text(
                     text = message.text,
                     color = textColor,

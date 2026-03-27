@@ -3,7 +3,9 @@ package com.example.nearchat.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.nearchat.data.datasource.BluetoothDataSource
+import com.example.nearchat.data.datasource.GroupBluetoothDataSource
 import com.example.nearchat.data.event.BluetoothEvent
+import com.example.nearchat.data.event.GroupEvent
 import com.example.nearchat.data.event.DeviceListUiEvent
 import com.example.nearchat.data.state.DeviceListState
 import com.example.nearchat.navigation.Screen
@@ -23,7 +25,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DeviceListViewModel @Inject constructor(
-    private val bluetoothDataSource: BluetoothDataSource
+    private val bluetoothDataSource: BluetoothDataSource,
+    private val groupBluetoothDataSource: GroupBluetoothDataSource
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DeviceListState())
@@ -87,6 +90,21 @@ class DeviceListViewModel @Inject constructor(
                 }
             }
         }
+
+        viewModelScope.launch {
+            groupBluetoothDataSource.events.collect { event ->
+                when (event) {
+                    is GroupEvent.JoinedGroup -> {
+                        _state.update { it.copy(connectingTo = null, isConnecting = false) }
+                        _effect.emit(UiEffect.NavigateTo(Screen.GroupChat))
+                    }
+                    is GroupEvent.Error -> {
+                        _state.update { it.copy(connectingTo = null, isConnecting = false, error = event.message) }
+                    }
+                    else -> {}
+                }
+            }
+        }
     }
 
     /**
@@ -126,17 +144,31 @@ class DeviceListViewModel @Inject constructor(
                 bluetoothDataSource.startDiscovery()
             }
 
+            is DeviceListUiEvent.DeviceClicked -> {
+                _state.update { it.copy(selectedDeviceForOptions = event.device) }
+            }
+
+            is DeviceListUiEvent.DismissConnectionOptions -> {
+                _state.update { it.copy(selectedDeviceForOptions = null) }
+            }
+
             is DeviceListUiEvent.ConnectToDevice -> {
-                // Check cooldown before connecting
-                if (bluetoothDataSource.isOnCooldown(event.device.address)) {
-                    val remaining = ((bluetoothDataSource.getCooldownEnd(event.device.address) - System.currentTimeMillis()) / 1000).coerceAtLeast(1)
-                    _state.update {
-                        it.copy(error = "Please wait ${remaining}s before reconnecting to ${event.device.name}")
+                _state.update { it.copy(selectedDeviceForOptions = null) }
+                if (event.asGroup) {
+                    _state.update { it.copy(connectingTo = event.device, isConnecting = true, error = null) }
+                    groupBluetoothDataSource.joinGroup(event.device)
+                } else {
+                    // Check cooldown before connecting 1:1
+                    if (bluetoothDataSource.isOnCooldown(event.device.address)) {
+                        val remaining = ((bluetoothDataSource.getCooldownEnd(event.device.address) - System.currentTimeMillis()) / 1000).coerceAtLeast(1)
+                        _state.update {
+                            it.copy(error = "Please wait ${remaining}s before reconnecting to ${event.device.name}")
+                        }
+                        return
                     }
-                    return
+                    _state.update { it.copy(connectingTo = event.device, isConnecting = true, error = null) }
+                    bluetoothDataSource.connect(event.device)
                 }
-                _state.update { it.copy(connectingTo = event.device, isConnecting = true, error = null) }
-                bluetoothDataSource.connect(event.device)
             }
 
             is DeviceListUiEvent.BackPressed -> {

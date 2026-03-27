@@ -3,6 +3,7 @@ package com.example.nearchat.di
 import android.content.Context
 import com.example.nearchat.data.datasource.AuthDataSource
 import com.example.nearchat.data.datasource.BluetoothDataSource
+import com.example.nearchat.data.datasource.GroupBluetoothDataSource
 import com.example.nearchat.data.datasource.LocalUserDataSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -44,4 +45,11 @@ object AppModule {
     fun provideLocalUserDataSource(
         @ApplicationContext context: Context
     ): LocalUserDataSource = LocalUserDataSource(context)
+
+    @Provides
+    @Singleton
+    fun provideGroupBluetoothDataSource(
+        @ApplicationContext context: Context,
+        localUserDataSource: LocalUserDataSource
+    ): GroupBluetoothDataSource = GroupBluetoothDataSource(context, localUserDataSource)
 }

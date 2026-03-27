@@ -8,11 +8,14 @@ sealed class HomeUiEvent {
     object AcceptConnection : HomeUiEvent()
     object DeclineConnection : HomeUiEvent()
     object ProfileClicked : HomeUiEvent()
+    object CreateGroupClicked : HomeUiEvent()
 }
 
 sealed class DeviceListUiEvent {
     object StartDiscovery : DeviceListUiEvent()
-    data class ConnectToDevice(val device: BtDevice) : DeviceListUiEvent()
+    data class DeviceClicked(val device: BtDevice) : DeviceListUiEvent()
+    data class ConnectToDevice(val device: BtDevice, val asGroup: Boolean) : DeviceListUiEvent()
+    object DismissConnectionOptions : DeviceListUiEvent()
     object BackPressed : DeviceListUiEvent()
 }
 
@@ -24,6 +27,19 @@ sealed class ChatUiEvent {
     object DisconnectDismissed : ChatUiEvent()
 }
 
+sealed class GroupLobbyUiEvent {
+    object StartChat : GroupLobbyUiEvent()
+    object BackPressed : GroupLobbyUiEvent()
+}
+
+sealed class GroupChatUiEvent {
+    data class MessageTyped(val text: String) : GroupChatUiEvent()
+    object SendMessage : GroupChatUiEvent()
+    object LeaveClicked : GroupChatUiEvent()
+    object LeaveConfirmed : GroupChatUiEvent()
+    object LeaveDismissed : GroupChatUiEvent()
+}
+
 sealed class ProfileUiEvent {
     data class NameChanged(val name: String) : ProfileUiEvent()
     object SaveName : ProfileUiEvent()
@@ -33,3 +49,4 @@ sealed class ProfileUiEvent {
     object SignOutDismissed : ProfileUiEvent()
     object BackPressed : ProfileUiEvent()
 }
+

@@ -4,5 +4,7 @@ data class HomeState(
     val bluetoothEnabled: Boolean = false,
     val hasPermissions: Boolean = false,
     val isLoading: Boolean = false,
-    val incomingRequest: String? = null
+    val incomingRequest: String? = null,
+    val declineCooldownEnd: Long? = null,
+    val declinedDeviceAddress: String? = null
 )

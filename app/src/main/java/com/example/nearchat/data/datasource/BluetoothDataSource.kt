@@ -29,6 +29,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,6 +47,7 @@ class BluetoothDataSource @Inject constructor(
         private const val HANDSHAKE_ACCEPT = "NEARCHAT_ACCEPT"
         private const val HANDSHAKE_DECLINE = "NEARCHAT_DECLINE"
         private const val HANDSHAKE_TIMEOUT_MS = 30_000L
+        private const val COOLDOWN_DURATION_MS = 60_000L
 
         // Identity prefix used to broadcast that this device runs NearChat.
         // Format: "[NC]DisplayName" — e.g. "[NC]Ameya"
@@ -80,6 +82,14 @@ class BluetoothDataSource @Inject constructor(
     // Store the original BT adapter name so we can restore it later
     private var originalAdapterName: String? = null
 
+    // ── Cooldown system ──
+    // Maps device MAC address → cooldown expiry timestamp (System.currentTimeMillis)
+    private val cooldownMap = ConcurrentHashMap<String, Long>()
+
+    // Track whether a teardown is in progress to prevent double Disconnected emission
+    @Volatile
+    private var teardownInProgress = false
+
     val isBluetoothEnabled: Boolean
         get() = bluetoothAdapter?.isEnabled == true
 
@@ -90,6 +100,29 @@ class BluetoothDataSource @Inject constructor(
         } catch (e: SecurityException) {
             "Unknown Device"
         }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // COOLDOWN
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fun isOnCooldown(address: String): Boolean {
+        val expiry = cooldownMap[address] ?: return false
+        if (System.currentTimeMillis() >= expiry) {
+            cooldownMap.remove(address)
+            return false
+        }
+        return true
+    }
+
+    fun getCooldownEnd(address: String): Long {
+        return cooldownMap[address] ?: 0L
+    }
+
+    private fun startCooldown(address: String) {
+        val endTime = System.currentTimeMillis() + COOLDOWN_DURATION_MS
+        cooldownMap[address] = endTime
+        Log.d(TAG, "Cooldown started for $address, expires at $endTime")
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // SERVER — always running on both devices from app launch
@@ -143,6 +176,19 @@ class BluetoothDataSource @Inject constructor(
 
                 when {
                     message.startsWith(HANDSHAKE_REQUEST_PREFIX) -> {
+                        // Check if this device is on cooldown
+                        if (isOnCooldown(remoteDevice.address)) {
+                            Log.d(TAG, "Rejecting request from ${remoteDevice.address} — cooldown active")
+                            try {
+                                tempOutput.write(HANDSHAKE_DECLINE.toByteArray(Charsets.UTF_8))
+                                tempOutput.flush()
+                                delay(100)
+                            } catch (_: IOException) {}
+                            try { socket.close() } catch (_: IOException) {}
+                            startServer()
+                            return@launch
+                        }
+
                         // ── REAL CONNECTION REQUEST ──
                         connectedSocket = socket
                         inputStream = tempInput
@@ -181,6 +227,7 @@ class BluetoothDataSource @Inject constructor(
                 pendingDevice = null
                 if (device != null) {
                     currentDevice = device
+                    Log.d(TAG, "Connection accepted — entering chat with ${device.name}")
                     _events.emit(BluetoothEvent.Connected(device))
                     startReadLoop()
                 }
@@ -194,13 +241,24 @@ class BluetoothDataSource @Inject constructor(
 
     fun declineConnection() {
         scope.launch {
+            val deviceAddress = pendingDevice?.address
             try {
                 outputStream?.write(HANDSHAKE_DECLINE.toByteArray(Charsets.UTF_8))
                 outputStream?.flush()
                 delay(100)
             } catch (_: IOException) {}
+
             pendingDevice = null
             closeSocket()
+
+            // Start cooldown for this device
+            if (deviceAddress != null) {
+                startCooldown(deviceAddress)
+                val endTime = getCooldownEnd(deviceAddress)
+                Log.d(TAG, "Decline cooldown started for $deviceAddress")
+                _events.emit(BluetoothEvent.ConnectionDeclined(deviceAddress, endTime))
+            }
+
             startServer()
         }
     }
@@ -290,6 +348,16 @@ class BluetoothDataSource @Inject constructor(
 
     @SuppressLint("MissingPermission")
     fun connect(device: BtDevice) {
+        // Check cooldown before attempting to connect
+        if (isOnCooldown(device.address)) {
+            val remaining = ((getCooldownEnd(device.address) - System.currentTimeMillis()) / 1000).coerceAtLeast(1)
+            Log.d(TAG, "Connection blocked — cooldown active for ${device.address} (${remaining}s left)")
+            _events.tryEmit(
+                BluetoothEvent.Error("Please wait ${remaining}s before reconnecting to ${device.name}")
+            )
+            return
+        }
+
         scope.launch {
             try {
                 // Stop discovery before connecting — the BT radio can't scan and connect
@@ -330,12 +398,17 @@ class BluetoothDataSource @Inject constructor(
                 when (response) {
                     HANDSHAKE_ACCEPT -> {
                         currentDevice = device
+                        Log.d(TAG, "Handshake accepted — entering chat with ${device.name}")
                         _events.emit(BluetoothEvent.Connected(device))
                         startReadLoop()
                     }
                     HANDSHAKE_DECLINE -> {
-                        _events.emit(BluetoothEvent.Error("${device.name} declined the connection"))
+                        Log.d(TAG, "${device.name} declined — starting cooldown")
                         closeSocket()
+                        // Start cooldown on the initiator side too
+                        startCooldown(device.address)
+                        val endTime = getCooldownEnd(device.address)
+                        _events.emit(BluetoothEvent.ConnectionDeclined(device.address, endTime))
                         startServer()
                     }
                     null -> {
@@ -395,14 +468,24 @@ class BluetoothDataSource @Inject constructor(
                 try {
                     val bytesRead = inputStream?.read(buffer) ?: -1
                     if (bytesRead == -1) {
-                        _events.emit(BluetoothEvent.Disconnected)
+                        // Only emit Disconnected if teardown is not already in progress
+                        if (!teardownInProgress) {
+                            Log.d(TAG, "Read loop: stream ended (remote closed)")
+                            _events.emit(BluetoothEvent.Disconnected)
+                        }
                         break
                     }
                     val message = String(buffer, 0, bytesRead, Charsets.UTF_8)
                     _events.emit(BluetoothEvent.MessageReceived(message))
                 } catch (e: IOException) {
-                    Log.d(TAG, "Read loop ended: ${e.message}")
-                    _events.emit(BluetoothEvent.Disconnected)
+                    // Only emit Disconnected if teardown is not already in progress
+                    // (i.e., disconnectAndRestart was called and already emitted it)
+                    if (!teardownInProgress) {
+                        Log.d(TAG, "Read loop ended unexpectedly: ${e.message}")
+                        _events.emit(BluetoothEvent.Disconnected)
+                    } else {
+                        Log.d(TAG, "Read loop ended (teardown in progress, skipping duplicate event)")
+                    }
                     break
                 }
             }
@@ -414,6 +497,7 @@ class BluetoothDataSource @Inject constructor(
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun closeSocket() {
+        Log.d(TAG, "closeSocket() — releasing streams and socket")
         currentDevice = null
         try { inputStream?.close() } catch (_: IOException) {}
         inputStream = null
@@ -423,7 +507,52 @@ class BluetoothDataSource @Inject constructor(
         connectedSocket = null
     }
 
+    /**
+     * Full teardown of the current session + automatic server restart.
+     * This is the primary method used when the chat ends (back-nav, explicit disconnect).
+     * It ensures no stale resources remain and the server is listening again.
+     */
+    fun disconnectAndRestart() {
+        Log.d(TAG, "disconnectAndRestart() — full teardown starting")
+        teardownInProgress = true
+
+        // 1. Cancel read loop (will throw IOException when socket closes, but
+        //    teardownInProgress flag prevents duplicate Disconnected emission)
+        readJob?.cancel()
+        readJob = null
+
+        // 2. Close connected socket (this interrupts the blocking read() call)
+        closeSocket()
+
+        // 3. Cancel server and close server socket
+        serverJob?.cancel()
+        serverJob = null
+        pendingDevice = null
+        try { serverSocket?.close() } catch (_: IOException) {}
+        serverSocket = null
+
+        // 4. Stop any ongoing discovery
+        stopDiscovery()
+
+        // 5. Emit Disconnected exactly once
+        _events.tryEmit(BluetoothEvent.Disconnected)
+
+        // 6. Wait briefly for BT stack to release the RFCOMM channel, then restart server
+        scope.launch {
+            delay(300)
+            teardownInProgress = false
+            Log.d(TAG, "Teardown complete — restarting server")
+            startServer()
+        }
+    }
+
+    /**
+     * Legacy disconnect — stops everything without restarting the server.
+     * Used only for sign-out or app-level teardown scenarios.
+     */
     fun disconnect() {
+        Log.d(TAG, "disconnect() — stopping all Bluetooth activity")
+        teardownInProgress = true
         readJob?.cancel()
         readJob = null
         serverJob?.cancel()
@@ -434,9 +563,15 @@ class BluetoothDataSource @Inject constructor(
         serverSocket = null
         stopDiscovery()
         _events.tryEmit(BluetoothEvent.Disconnected)
+        // Reset flag asynchronously
+        scope.launch {
+            delay(300)
+            teardownInProgress = false
+        }
     }
 
     fun cancelServer() {
+        Log.d(TAG, "cancelServer() — closing server socket")
         serverJob?.cancel()
         serverJob = null
         pendingDevice = null

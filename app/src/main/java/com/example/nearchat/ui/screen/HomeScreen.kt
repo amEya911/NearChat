@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +39,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +55,7 @@ import com.example.nearchat.data.event.HomeUiEvent
 import com.example.nearchat.data.state.HomeState
 import com.example.nearchat.ui.component.PermissionRationale
 import com.example.nearchat.util.hasBluetoothPermissions
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -197,6 +202,49 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
+                    }
+
+                    // ── Cooldown Timer Banner ──
+                    val cooldownEnd = state.declineCooldownEnd
+                    if (cooldownEnd != null && cooldownEnd > System.currentTimeMillis()) {
+                        var remainingSeconds by remember {
+                            mutableLongStateOf(
+                                ((cooldownEnd - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
+                            )
+                        }
+                        LaunchedEffect(cooldownEnd) {
+                            while (true) {
+                                val remaining = ((cooldownEnd - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
+                                remainingSeconds = remaining
+                                if (remaining <= 0) break
+                                delay(1000)
+                            }
+                        }
+                        if (remainingSeconds > 0) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Timer,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Reconnect available in ${remainingSeconds}s",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(48.dp))

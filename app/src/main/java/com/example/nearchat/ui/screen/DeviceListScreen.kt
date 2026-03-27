@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -122,7 +123,7 @@ fun DeviceListScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.BluetoothSearching,
+                            imageVector = Icons.AutoMirrored.Filled.BluetoothSearching,
                             contentDescription = null,
                             modifier = Modifier.size(64.dp),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
@@ -158,7 +159,8 @@ fun DeviceListScreen(
                     items(state.devices, key = { it.address }) { device ->
                         DeviceItem(
                             device = device,
-                            onClick = { onEvent(DeviceListUiEvent.ConnectToDevice(device)) }
+                            onClick = { onEvent(DeviceListUiEvent.ConnectToDevice(device)) },
+                            cooldownEndTime = state.cooldowns[device.address]
                         )
                     }
                 }

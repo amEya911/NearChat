@@ -9,6 +9,8 @@ import com.example.nearchat.data.state.HomeState
 import com.example.nearchat.navigation.Screen
 import com.example.nearchat.navigation.UiEffect
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -32,6 +34,7 @@ class HomeViewModel @Inject constructor(
 
     private var serverStarted = false
     private var discoverableRequested = false
+    private var cooldownTimerJob: Job? = null
 
     init {
         _state.update {
@@ -58,7 +61,22 @@ class HomeViewModel @Inject constructor(
                         _state.update {
                             it.copy(isLoading = false, incomingRequest = null)
                         }
-                        // Auto-restart server after disconnect so we're always listening
+                        // Reset serverStarted so startServerIfNeeded() will actually restart
+                        serverStarted = false
+                        startServerIfNeeded()
+                    }
+                    is BluetoothEvent.ConnectionDeclined -> {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                incomingRequest = null,
+                                declineCooldownEnd = event.cooldownEndTime,
+                                declinedDeviceAddress = event.deviceAddress
+                            )
+                        }
+                        // Start the visible countdown timer
+                        startCooldownTimer(event.cooldownEndTime)
+                        // Restart server after decline so we keep listening
                         startServerIfNeeded()
                     }
                     is BluetoothEvent.Error -> {
@@ -71,6 +89,22 @@ class HomeViewModel @Inject constructor(
                     }
                     else -> {}
                 }
+            }
+        }
+    }
+
+    private fun startCooldownTimer(endTime: Long) {
+        cooldownTimerJob?.cancel()
+        cooldownTimerJob = viewModelScope.launch {
+            while (true) {
+                val remaining = endTime - System.currentTimeMillis()
+                if (remaining <= 0) {
+                    _state.update {
+                        it.copy(declineCooldownEnd = null, declinedDeviceAddress = null)
+                    }
+                    break
+                }
+                delay(1000)
             }
         }
     }
@@ -117,8 +151,7 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.DeclineConnection -> {
                 bluetoothDataSource.declineConnection()
                 _state.update { it.copy(incomingRequest = null) }
-                // Restart server to listen for new connections
-                startServerIfNeeded()
+                // Cooldown + server restart handled by BluetoothDataSource + ConnectionDeclined event
             }
         }
     }

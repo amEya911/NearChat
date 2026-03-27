@@ -7,5 +7,6 @@ data class DeviceListState(
     val isDiscovering: Boolean = false,
     val isConnecting: Boolean = false,
     val connectingTo: BtDevice? = null,
-    val error: String? = null
+    val error: String? = null,
+    val cooldowns: Map<String, Long> = emptyMap()
 )

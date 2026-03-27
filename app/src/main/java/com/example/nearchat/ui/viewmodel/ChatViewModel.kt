@@ -97,11 +97,28 @@ class ChatViewModel @Inject constructor(
             }
             is ChatUiEvent.DisconnectConfirmed -> {
                 _state.update { it.copy(showDisconnectDialog = false) }
-                bluetoothDataSource.disconnect()
+                bluetoothDataSource.disconnectAndRestart()
             }
             is ChatUiEvent.DisconnectDismissed -> {
                 _state.update { it.copy(showDisconnectDialog = false) }
             }
+        }
+    }
+
+    /**
+     * Called when this ViewModel is destroyed — e.g. when the user navigates away
+     * from the Chat screen via system back or any other navigation that pops
+     * the composable without going through the explicit disconnect dialog.
+     *
+     * This is the safety net that ensures the socket, streams, and readJob are
+     * always cleaned up, preventing stale connections from blocking reconnection.
+     */
+    override fun onCleared() {
+        super.onCleared()
+        // If there's still an active connection when the ViewModel dies,
+        // perform a full teardown + server restart
+        if (bluetoothDataSource.currentDevice != null) {
+            bluetoothDataSource.disconnectAndRestart()
         }
     }
 }

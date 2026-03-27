@@ -9,6 +9,8 @@ import com.example.nearchat.data.state.DeviceListState
 import com.example.nearchat.navigation.Screen
 import com.example.nearchat.navigation.UiEffect
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -32,6 +34,8 @@ class DeviceListViewModel @Inject constructor(
 
     // Track already-seen addresses to avoid duplicates within a scan
     private val seenAddresses = mutableSetOf<String>()
+
+    private var cooldownTickJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -60,8 +64,19 @@ class DeviceListViewModel @Inject constructor(
                     }
 
                     is BluetoothEvent.Connected -> {
-                        _state.update { it.copy(connectingTo = null) }
+                        _state.update { it.copy(connectingTo = null, isConnecting = false) }
                         _effect.emit(UiEffect.NavigateTo(Screen.Chat))
+                    }
+
+                    is BluetoothEvent.ConnectionDeclined -> {
+                        _state.update { state ->
+                            state.copy(
+                                connectingTo = null,
+                                isConnecting = false,
+                                cooldowns = state.cooldowns + (event.deviceAddress to event.cooldownEndTime)
+                            )
+                        }
+                        startCooldownTicker()
                     }
 
                     is BluetoothEvent.Error -> {
@@ -70,6 +85,26 @@ class DeviceListViewModel @Inject constructor(
 
                     else -> {}
                 }
+            }
+        }
+    }
+
+    /**
+     * Periodically tick to remove expired cooldowns from the state map,
+     * which triggers UI recomposition to update timers.
+     */
+    private fun startCooldownTicker() {
+        if (cooldownTickJob?.isActive == true) return
+        cooldownTickJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                val now = System.currentTimeMillis()
+                val current = _state.value.cooldowns
+                val active = current.filterValues { it > now }
+                if (active != current) {
+                    _state.update { it.copy(cooldowns = active) }
+                }
+                if (active.isEmpty()) break
             }
         }
     }
@@ -85,12 +120,21 @@ class DeviceListViewModel @Inject constructor(
                         error = null,
                         isDiscovering = false,
                         connectingTo = null
+                        // Preserve cooldowns across scans
                     )
                 }
                 bluetoothDataSource.startDiscovery()
             }
 
             is DeviceListUiEvent.ConnectToDevice -> {
+                // Check cooldown before connecting
+                if (bluetoothDataSource.isOnCooldown(event.device.address)) {
+                    val remaining = ((bluetoothDataSource.getCooldownEnd(event.device.address) - System.currentTimeMillis()) / 1000).coerceAtLeast(1)
+                    _state.update {
+                        it.copy(error = "Please wait ${remaining}s before reconnecting to ${event.device.name}")
+                    }
+                    return
+                }
                 _state.update { it.copy(connectingTo = event.device, isConnecting = true, error = null) }
                 bluetoothDataSource.connect(event.device)
             }

@@ -13,9 +13,7 @@ sealed class HomeUiEvent {
 
 sealed class DeviceListUiEvent {
     object StartDiscovery : DeviceListUiEvent()
-    data class DeviceClicked(val device: BtDevice) : DeviceListUiEvent()
     data class ConnectToDevice(val device: BtDevice, val asGroup: Boolean) : DeviceListUiEvent()
-    object DismissConnectionOptions : DeviceListUiEvent()
     object BackPressed : DeviceListUiEvent()
 }
 
@@ -29,6 +27,8 @@ sealed class ChatUiEvent {
 
 sealed class GroupLobbyUiEvent {
     object StartChat : GroupLobbyUiEvent()
+    data class AcceptMember(val address: String) : GroupLobbyUiEvent()
+    data class RejectMember(val address: String) : GroupLobbyUiEvent()
     object BackPressed : GroupLobbyUiEvent()
 }
 

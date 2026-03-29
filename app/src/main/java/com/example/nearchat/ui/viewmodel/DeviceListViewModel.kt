@@ -82,6 +82,17 @@ class DeviceListViewModel @Inject constructor(
                         startCooldownTicker()
                     }
 
+                    is BluetoothEvent.DeviceIsHostingGroup -> {
+                        _state.update { state ->
+                            state.copy(
+                                devices = state.devices.map { 
+                                    if (it.address == event.device.address) event.device else it 
+                                }
+                            )
+                        }
+                        groupBluetoothDataSource.joinGroup(event.device)
+                    }
+
                     is BluetoothEvent.Error -> {
                         _state.update { it.copy(connectingTo = null, isConnecting = false, error = event.message) }
                     }
@@ -96,7 +107,7 @@ class DeviceListViewModel @Inject constructor(
                 when (event) {
                     is GroupEvent.JoinedGroup -> {
                         _state.update { it.copy(connectingTo = null, isConnecting = false) }
-                        _effect.emit(UiEffect.NavigateTo(Screen.GroupChat))
+                        _effect.emit(UiEffect.NavigateTo(Screen.GroupLobby))
                     }
                     is GroupEvent.Error -> {
                         _state.update { it.copy(connectingTo = null, isConnecting = false, error = event.message) }
@@ -144,16 +155,7 @@ class DeviceListViewModel @Inject constructor(
                 bluetoothDataSource.startDiscovery()
             }
 
-            is DeviceListUiEvent.DeviceClicked -> {
-                _state.update { it.copy(selectedDeviceForOptions = event.device) }
-            }
-
-            is DeviceListUiEvent.DismissConnectionOptions -> {
-                _state.update { it.copy(selectedDeviceForOptions = null) }
-            }
-
             is DeviceListUiEvent.ConnectToDevice -> {
-                _state.update { it.copy(selectedDeviceForOptions = null) }
                 if (event.asGroup) {
                     _state.update { it.copy(connectingTo = event.device, isConnecting = true, error = null) }
                     groupBluetoothDataSource.joinGroup(event.device)

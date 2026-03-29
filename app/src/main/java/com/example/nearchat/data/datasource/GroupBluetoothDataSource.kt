@@ -67,6 +67,8 @@ class GroupBluetoothDataSource @Inject constructor(
     private var serverSocket: BluetoothServerSocket? = null
     private var acceptJob: Job? = null
     private val members = ConcurrentHashMap<String, MemberConnection>() // address → connection
+    private val pendingMembers = ConcurrentHashMap<String, MemberConnection>()
+    private val activeMemberNames = mutableSetOf<String>()
 
     // ── Member state ──
     private var hostSocket: BluetoothSocket? = null
@@ -104,6 +106,13 @@ class GroupBluetoothDataSource @Inject constructor(
         isActive = true
         teardownInProgress = false
         Log.d(TAG, "Creating group — starting accept loop")
+
+        try {
+            val hostName = localUserDataSource.getDisplayName() ?: "Host"
+            bluetoothAdapter?.name = "${BluetoothDataSource.GROUP_IDENTITY_PREFIX}$hostName"
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Failed to set group adapter name: ${e.message}")
+        }
 
         acceptJob?.cancel()
         acceptJob = scope.launch {
@@ -167,19 +176,9 @@ class GroupBluetoothDataSource @Inject constructor(
             }
 
             val address = socket.remoteDevice.address
+            Log.d(TAG, "Connection requested by $memberName ($address)")
 
-            // Send welcome with host name + current member list
-            val hostDisplayName = localUserDataSource.getDisplayName() ?: "Host"
-            val existingMembers = members.values.map { it.name }.joinToString(",")
-            val welcome = "$GROUP_WELCOME_PREFIX$hostDisplayName:$existingMembers"
-            output.write(welcome.toByteArray(Charsets.UTF_8))
-            output.flush()
-            Log.d(TAG, "Sent welcome to $memberName: $welcome")
-
-            // Notify existing members about the new joiner
-            broadcastToMembers("$GROUP_MEMBER_JOINED_PREFIX$memberName", excludeAddress = null)
-
-            // Store the new member
+            // Store in pending map (re-using the current map, but unactivated)
             val conn = MemberConnection(
                 name = memberName,
                 address = address,
@@ -187,17 +186,50 @@ class GroupBluetoothDataSource @Inject constructor(
                 input = input,
                 output = output
             )
-            members[address] = conn
-            conn.readJob = startMemberReadLoop(conn)
+            // Add prefix [PENDING] to distinguish from active members temporarily, or handle properly via dedicated map
+            // For now, we'll store it in a dedicated pending map
+            pendingMembers[address] = conn
 
-            Log.d(TAG, "Member added: $memberName ($address). Total: ${members.size}")
-            _events.emit(GroupEvent.MemberJoined(memberName))
+            _events.emit(GroupEvent.ConnectionRequested(address, memberName))
 
         } catch (e: IOException) {
             Log.e(TAG, "Error handling member: ${e.message}")
             try { socket.close() } catch (_: IOException) {}
         }
     }
+
+    fun acceptMember(address: String) {
+        val conn = pendingMembers.remove(address) ?: return
+        scope.launch {
+            try {
+                val hostDisplayName = localUserDataSource.getDisplayName() ?: "Host"
+                val existingMembers = members.values.map { it.name }.joinToString(",")
+                val welcome = "$GROUP_WELCOME_PREFIX$hostDisplayName:$existingMembers"
+                conn.output.write(welcome.toByteArray(Charsets.UTF_8))
+                conn.output.flush()
+                Log.d(TAG, "Sent welcome to ${conn.name}: $welcome")
+
+                // Notify existing members about the new joiner
+                broadcastToMembers("$GROUP_MEMBER_JOINED_PREFIX${conn.name}", excludeAddress = null)
+
+                members[address] = conn
+                conn.readJob = startMemberReadLoop(conn)
+
+                Log.d(TAG, "Member added: ${conn.name} ($address). Total: ${members.size}")
+                _events.emit(GroupEvent.MemberJoined(conn.name))
+            } catch (e: IOException) {
+                Log.e(TAG, "Error accepting member: ${e.message}")
+                try { conn.socket.close() } catch (_: IOException) {}
+            }
+        }
+    }
+
+    fun rejectMember(address: String) {
+        val conn = pendingMembers.remove(address) ?: return
+        try { conn.socket.close() } catch (_: IOException) {}
+    }
+
+
 
     /**
      * Host starts the chat — notifies all members.
@@ -211,7 +243,9 @@ class GroupBluetoothDataSource @Inject constructor(
         }
     }
 
-    fun getMemberNames(): List<String> = members.values.map { it.name }
+    fun getMemberNames(): List<String> {
+        return if (isHost) members.values.map { it.name } else activeMemberNames.toList()
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // MEMBER: Join an existing group
@@ -275,6 +309,9 @@ class GroupBluetoothDataSource @Inject constructor(
                     ?.split(",")
                     ?.filter { it.isNotBlank() }
                     ?: emptyList()
+
+                activeMemberNames.clear()
+                activeMemberNames.addAll(existingMembers)
 
                 Log.d(TAG, "Joined group. Host: $hostName, existing members: $existingMembers")
                 _events.emit(GroupEvent.JoinedGroup(hostName!!, existingMembers))
@@ -424,12 +461,14 @@ class GroupBluetoothDataSource @Inject constructor(
             raw.startsWith(GROUP_MEMBER_JOINED_PREFIX) -> {
                 val name = raw.removePrefix(GROUP_MEMBER_JOINED_PREFIX).trim()
                 if (name.isNotBlank()) {
+                    activeMemberNames.add(name)
                     _events.emit(GroupEvent.MemberJoined(name))
                 }
             }
             raw.startsWith(GROUP_MEMBER_LEFT_PREFIX) -> {
                 val name = raw.removePrefix(GROUP_MEMBER_LEFT_PREFIX).trim()
                 if (name.isNotBlank()) {
+                    activeMemberNames.remove(name)
                     _events.emit(GroupEvent.MemberLeft(name))
                 }
             }
@@ -516,6 +555,14 @@ class GroupBluetoothDataSource @Inject constructor(
             try { serverSocket?.close() } catch (_: IOException) {}
             serverSocket = null
 
+            // Close pending members
+            for ((_, conn) in pendingMembers) {
+                try { conn.input.close() } catch (_: IOException) {}
+                try { conn.output.close() } catch (_: IOException) {}
+                try { conn.socket.close() } catch (_: IOException) {}
+            }
+            pendingMembers.clear()
+
             // Close all member connections
             for ((_, conn) in members) {
                 conn.readJob?.cancel()
@@ -524,6 +571,15 @@ class GroupBluetoothDataSource @Inject constructor(
                 try { conn.socket.close() } catch (_: IOException) {}
             }
             members.clear()
+
+            // Revert adapter name to [NC]
+            try {
+                val hostName = localUserDataSource.getDisplayName() ?: "Host"
+                if (bluetoothAdapter?.name?.startsWith(BluetoothDataSource.GROUP_IDENTITY_PREFIX) == true) {
+                    bluetoothAdapter.name = "${BluetoothDataSource.IDENTITY_PREFIX}$hostName"
+                }
+            } catch (e: SecurityException) {}
+
         } else {
             // Member: close host connection
             hostReadJob?.cancel()
@@ -533,6 +589,7 @@ class GroupBluetoothDataSource @Inject constructor(
 
         hostName = null
         isHost = false
+        activeMemberNames.clear()
 
         _events.tryEmit(GroupEvent.GroupDisbanded)
 

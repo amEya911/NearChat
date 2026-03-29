@@ -139,6 +139,13 @@ fun DeviceItem(
                             color = MaterialTheme.colorScheme.error
                         )
                     }
+                } else if (device.isHostingGroup) {
+                    Text(
+                        text = "(Hosting a group)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
                 } else {
                     Text(
                         text = device.address,

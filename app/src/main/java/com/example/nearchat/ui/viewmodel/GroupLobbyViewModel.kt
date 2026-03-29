@@ -6,6 +6,7 @@ import com.example.nearchat.data.datasource.GroupBluetoothDataSource
 import com.example.nearchat.data.event.GroupEvent
 import com.example.nearchat.data.event.GroupLobbyUiEvent
 import com.example.nearchat.data.state.GroupLobbyState
+import com.example.nearchat.data.state.PendingRequest
 import com.example.nearchat.navigation.Screen
 import com.example.nearchat.navigation.UiEffect
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +25,8 @@ class GroupLobbyViewModel @Inject constructor(
     private val groupDataSource: GroupBluetoothDataSource
 ) : ViewModel() {
 
+    private var isStartingChat = false
+
     private val _state = MutableStateFlow(GroupLobbyState())
     val state: StateFlow<GroupLobbyState> = _state.asStateFlow()
 
@@ -31,12 +34,23 @@ class GroupLobbyViewModel @Inject constructor(
     val effect: SharedFlow<UiEffect> = _effect.asSharedFlow()
 
     init {
-        // Start accepting group members
-        groupDataSource.createGroup()
+        _state.update {
+            it.copy(
+                isHost = groupDataSource.isHost,
+                members = groupDataSource.getMemberNames()
+            )
+        }
 
         viewModelScope.launch {
             groupDataSource.events.collect { event ->
                 when (event) {
+                    is GroupEvent.ConnectionRequested -> {
+                        _state.update { state ->
+                            val currentReqs = state.pendingRequests.toMutableList()
+                            currentReqs.add(PendingRequest(event.address, event.name))
+                            state.copy(pendingRequests = currentReqs)
+                        }
+                    }
                     is GroupEvent.MemberJoined -> {
                         _state.update { state ->
                             state.copy(members = state.members + event.name)
@@ -48,6 +62,7 @@ class GroupLobbyViewModel @Inject constructor(
                         }
                     }
                     is GroupEvent.GroupStarted -> {
+                        isStartingChat = true
                         _effect.emit(UiEffect.NavigateTo(Screen.GroupChat))
                     }
                     is GroupEvent.Error -> {
@@ -66,6 +81,14 @@ class GroupLobbyViewModel @Inject constructor(
                     groupDataSource.startGroupChat()
                 }
             }
+            is GroupLobbyUiEvent.AcceptMember -> {
+                groupDataSource.acceptMember(event.address)
+                _state.update { it.copy(pendingRequests = it.pendingRequests.filter { req -> req.address != event.address }) }
+            }
+            is GroupLobbyUiEvent.RejectMember -> {
+                groupDataSource.rejectMember(event.address)
+                _state.update { it.copy(pendingRequests = it.pendingRequests.filter { req -> req.address != event.address }) }
+            }
             is GroupLobbyUiEvent.BackPressed -> {
                 groupDataSource.disconnectAll()
                 viewModelScope.launch {
@@ -77,7 +100,7 @@ class GroupLobbyViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        if (groupDataSource.isActive) {
+        if (!isStartingChat && groupDataSource.isActive) {
             groupDataSource.disconnectAll()
         }
     }

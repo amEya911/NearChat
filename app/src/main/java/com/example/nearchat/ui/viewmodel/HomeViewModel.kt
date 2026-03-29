@@ -3,6 +3,7 @@ package com.example.nearchat.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.nearchat.data.datasource.BluetoothDataSource
+import com.example.nearchat.data.datasource.GroupBluetoothDataSource
 import com.example.nearchat.data.event.BluetoothEvent
 import com.example.nearchat.data.event.HomeUiEvent
 import com.example.nearchat.data.state.HomeState
@@ -23,7 +24,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val bluetoothDataSource: BluetoothDataSource
+    private val bluetoothDataSource: BluetoothDataSource,
+    private val groupBluetoothDataSource: GroupBluetoothDataSource
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
@@ -144,6 +146,7 @@ class HomeViewModel @Inject constructor(
                 }
             }
             is HomeUiEvent.CreateGroupClicked -> {
+                groupBluetoothDataSource.createGroup()
                 viewModelScope.launch {
                     _effect.emit(UiEffect.NavigateTo(Screen.GroupLobby))
                 }

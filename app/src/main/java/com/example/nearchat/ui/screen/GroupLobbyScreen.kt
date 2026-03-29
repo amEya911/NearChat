@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.nearchat.data.event.GroupLobbyUiEvent
 import com.example.nearchat.data.state.GroupLobbyState
+import com.example.nearchat.data.state.PendingRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +67,25 @@ fun GroupLobbyScreen(
         ),
         label = "pulse"
     )
+
+    val currentRequest = state.pendingRequests.firstOrNull()
+    if (currentRequest != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { onEvent(GroupLobbyUiEvent.RejectMember(currentRequest.address)) },
+            title = { Text("Connection Request") },
+            text = { Text("${currentRequest.name} wants to join the group.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { onEvent(GroupLobbyUiEvent.AcceptMember(currentRequest.address)) }) {
+                    Text("Accept")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { onEvent(GroupLobbyUiEvent.RejectMember(currentRequest.address)) }) {
+                    Text("Decline")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -87,28 +107,30 @@ fun GroupLobbyScreen(
             )
         },
         bottomBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Button(
-                    onClick = { onEvent(GroupLobbyUiEvent.StartChat) },
+            if (state.isHost) {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
-                    enabled = state.members.isNotEmpty(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
+                        .padding(16.dp)
                 ) {
-                    Text(
-                        text = if (state.members.isEmpty()) "Waiting for members..."
-                        else "Start Chat (${state.members.size} member${if (state.members.size > 1) "s" else ""})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Button(
+                        onClick = { onEvent(GroupLobbyUiEvent.StartChat) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        enabled = state.members.isNotEmpty(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text(
+                            text = if (state.members.isEmpty()) "Waiting for members..."
+                            else "Start Chat (${state.members.size} member${if (state.members.size > 1) "s" else ""})",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         },
@@ -149,20 +171,22 @@ fun GroupLobbyScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Waiting for others to join...",
+                text = if (state.isHost) "Waiting for others to join..." else "Waiting for Host to start chat...",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.alpha(alpha)
             )
 
-            Text(
-                text = "Other NearChat users can find your group\nthrough \"Find Nearby Users\"",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            if (state.isHost) {
+                Text(
+                    text = "Other NearChat users can find your group\nthrough \"Find Nearby Users\"",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 

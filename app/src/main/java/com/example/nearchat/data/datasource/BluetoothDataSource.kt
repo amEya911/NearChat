@@ -46,6 +46,7 @@ class BluetoothDataSource @Inject constructor(
         private const val HANDSHAKE_REQUEST_PREFIX = "NEARCHAT_REQUEST:"
         private const val HANDSHAKE_ACCEPT = "NEARCHAT_ACCEPT"
         private const val HANDSHAKE_DECLINE = "NEARCHAT_DECLINE"
+        private const val HANDSHAKE_HOSTING_GROUP = "NEARCHAT_HOSTING_GROUP"
         private const val HANDSHAKE_TIMEOUT_MS = 30_000L
         private const val COOLDOWN_DURATION_MS = 60_000L
 
@@ -53,6 +54,7 @@ class BluetoothDataSource @Inject constructor(
         // Format: "[NC]DisplayName" — e.g. "[NC]Ameya"
         // During discovery, only devices whose BT name starts with this prefix are shown.
         const val IDENTITY_PREFIX = "[NC]"
+        const val GROUP_IDENTITY_PREFIX = "[NC-G]"
     }
 
     private val bluetoothManager: BluetoothManager? =
@@ -176,6 +178,19 @@ class BluetoothDataSource @Inject constructor(
 
                 when {
                     message.startsWith(HANDSHAKE_REQUEST_PREFIX) -> {
+                        // Check if we are currently hosting a group
+                        if (bluetoothAdapter?.name?.startsWith(GROUP_IDENTITY_PREFIX) == true) {
+                            Log.d(TAG, "Rejecting 1:1 request from ${remoteDevice.address} — we are hosting a group")
+                            try {
+                                tempOutput.write(HANDSHAKE_HOSTING_GROUP.toByteArray(Charsets.UTF_8))
+                                tempOutput.flush()
+                                delay(100)
+                            } catch (_: IOException) {}
+                            try { socket.close() } catch (_: IOException) {}
+                            startServer()
+                            return@launch
+                        }
+
                         // Check if this device is on cooldown
                         if (isOnCooldown(remoteDevice.address)) {
                             Log.d(TAG, "Rejecting request from ${remoteDevice.address} — cooldown active")
@@ -293,12 +308,14 @@ class BluetoothDataSource @Inject constructor(
                             ?: try { it.name } catch (_: SecurityException) { null }
 
                         // Only show devices broadcasting the NearChat identity prefix.
-                        if (rawName != null && rawName.startsWith(IDENTITY_PREFIX)) {
-                            val displayName = rawName.removePrefix(IDENTITY_PREFIX).trim()
+                        if (rawName != null && (rawName.startsWith(IDENTITY_PREFIX) || rawName.startsWith(GROUP_IDENTITY_PREFIX))) {
+                            val isGroup = rawName.startsWith(GROUP_IDENTITY_PREFIX)
+                            val prefix = if (isGroup) GROUP_IDENTITY_PREFIX else IDENTITY_PREFIX
+                            val displayName = rawName.removePrefix(prefix).trim()
                             if (displayName.isNotBlank()) {
                                 _events.tryEmit(
                                     BluetoothEvent.DeviceFound(
-                                        BtDevice(name = displayName, address = it.address)
+                                        BtDevice(name = displayName, address = it.address, isHostingGroup = isGroup)
                                     )
                                 )
                             }
@@ -409,6 +426,13 @@ class BluetoothDataSource @Inject constructor(
                         startCooldown(device.address)
                         val endTime = getCooldownEnd(device.address)
                         _events.emit(BluetoothEvent.ConnectionDeclined(device.address, endTime))
+                        startServer()
+                    }
+                    HANDSHAKE_HOSTING_GROUP -> {
+                        Log.d(TAG, "${device.name} is hosting a group! Redirecting...")
+                        closeSocket()
+                        val updatedDevice = device.copy(isHostingGroup = true)
+                        _events.emit(BluetoothEvent.DeviceIsHostingGroup(updatedDevice))
                         startServer()
                     }
                     null -> {

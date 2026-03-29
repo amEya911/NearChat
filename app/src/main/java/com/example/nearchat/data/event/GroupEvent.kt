@@ -1,6 +1,7 @@
 package com.example.nearchat.data.event
 
 sealed class GroupEvent {
+    data class ConnectionRequested(val address: String, val name: String) : GroupEvent()
     data class MemberJoined(val name: String) : GroupEvent()
     data class MemberLeft(val name: String) : GroupEvent()
     data class GroupMessageReceived(val senderName: String, val text: String) : GroupEvent()

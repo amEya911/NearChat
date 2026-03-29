@@ -11,5 +11,6 @@ sealed class BluetoothEvent {
     data class MessageReceived(val text: String) : BluetoothEvent()
     object Disconnected : BluetoothEvent()
     data class ConnectionDeclined(val deviceAddress: String, val cooldownEndTime: Long) : BluetoothEvent()
+    data class DeviceIsHostingGroup(val device: BtDevice) : BluetoothEvent()
     data class Error(val message: String) : BluetoothEvent()
 }

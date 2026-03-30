@@ -1,4 +1,4 @@
-# NearChat 📱⚡️
+# NearChat 
 
 **NearChat** is a fast, completely offline, decentralized chat application for Android that uses **Bluetooth Classic (RFCOMM)** to enable seamless peer-to-peer and group messaging. 
 
@@ -6,7 +6,7 @@ Built with modern Android development practices, NearChat is designed to be high
 
 ---
 
-## 🚀 Features
+## Features
 
 - **Decentralized Messaging:** Chat freely without Wi-Fi or cellular networks anywhere you go.
 - **1:1 Peer-to-Peer Chat:** Instantly discover nearby devices and establish secure two-way RFCOMM sockets.
@@ -17,11 +17,11 @@ Built with modern Android development practices, NearChat is designed to be high
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 ---
 
-## 🗺️ User Flow & Navigation
+## User Flow & Navigation
 
 The flowchart below visualizes how users interact and navigate through NearChat's 1:1 and Group Chat ecosystems:
 
@@ -46,7 +46,7 @@ flowchart TD
 
 ---
 
-## 🛠 Tech Stack & Architecture
+## Tech Stack & Architecture
 
 - **Language:** Kotlin
 - **UI:** Jetpack Compose (Declarative UI)
@@ -71,7 +71,7 @@ graph TD
 
 ---
 
-## 📡 Group Chat Setup: Star Topology
+## Group Chat Setup: Star Topology
 
 Due to the hardware limitations of Bluetooth Classic, true decentralized mesh networks are difficult to enforce uniformly across Android devices. NearChat solves this by establishing a **Star Topology** for group chats.
 
@@ -92,7 +92,7 @@ graph TD
 
 ---
 
-## 🔄 Dynamic Handshake & OS Caching Fallback
+## Dynamic Handshake & OS Caching Fallback
 
 Android OS aggressively caches Bluetooth device names to save battery. If `User A` changes their broadcast name from `[NC]` (1:1 mode) to `[NC-G]` (Group Host mode), `User C`'s device might still rely on the outdated cached name. 
 
@@ -117,7 +117,7 @@ sequenceDiagram
 
 ---
 
-## 🏃 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Android Studio Ladybug or newer.
@@ -134,6 +134,6 @@ sequenceDiagram
 
 ---
 
-## 🤝 Contributing
+## Contributing
 Contributions, issues, and feature requests are welcome! 
 Feel free to check the [issues page](https://github.com/yourusername/NearChat/issues).

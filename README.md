@@ -30,7 +30,7 @@
 
 ## Key Features
 
-- **Completely Decentralized:** Chat freely anywhere you go—no internet, Wi-Fi, or cellular network required.
+- **Completely Decentralized:** Chat freely anywhere you go-no internet, Wi-Fi, or cellular network required.
 - **1:1 Peer-to-Peer Chat:** Instantly discover nearby devices and establish secure, bi-directional RFCOMM sockets.
 - **Group Chat (Star Topology):** Host local group chats where the Host acts as a central relay, seamlessly broadcasting messages to all connected members simultaneously.
 - **Permission-Based Lobbies:** Group hosts maintain full control over their lobbies, featuring real-time Accept/Decline dialogs for incoming connection requests.
@@ -53,7 +53,7 @@ NearChat is built utilizing **Clean Architecture** principles and the **MVVM** p
 
 ```mermaid
 graph TD
-    UI[📱 UI Layer<br/>Jetpack Compose] -->|Events| VM[ViewModels]
+    UI[UI Layer<br/>Jetpack Compose] -->|Events| VM[ViewModels]
     VM -->|Observes| State[StateFlow / SharedFlow]
     State --> UI
     
@@ -83,10 +83,10 @@ Due to the hardware limitations of Bluetooth Classic, establishing a true decent
 
 ```mermaid
 graph TD
-    Host((👑 Host Device<br/>Relay Server))
-    Member1(📱 Member 1)
-    Member2(📱 Member 2)
-    Member3(📱 Member 3)
+    Host((Host Device<br/>Relay Server))
+    Member1(Member 1)
+    Member2(Member 2)
+    Member3(Member 3)
 
     Host <-->|RFCOMM Socket 1| Member1
     Host <-->|RFCOMM Socket 2| Member2
@@ -120,7 +120,7 @@ sequenceDiagram
     Client->>Host Server: Automatically sends Group Join Req (GROUP_UUID)
     Host Server-->>Client: Host Prompts UI Dialog (Accept/Reject)
     Host Server-->>Client: Emits GROUP_WELCOME Member List
-    Note over Client: ✅ Successfully joined Group Lobby!
+    Note over Client: Successfully joined Group Lobby!
 ```
 
 ---
@@ -131,13 +131,13 @@ The flowchart below visualizes how users interact and navigate through NearChat'
 
 ```mermaid
 flowchart TD
-    Home[🏠 Home Screen] -->|Create Group| HostingGroup(👑 Host: Starts Group Server)
-    Home -->|Find Devices| Discovery[🔍 Device Discovery Screen]
+    Home[Home Screen] -->|Create Group| HostingGroup(Host: Starts Group Server)
+    Home -->|Find Devices| Discovery[Device Discovery Screen]
     
-    HostingGroup -.->|Waits for join requests| Lobby(👥 Group Lobby Screen)
+    HostingGroup -.->|Waits for join requests| Lobby(Group Lobby Screen)
     
     Discovery -->|Taps 1:1 Device| WaitAccept{Wait for Accept}
-    WaitAccept -->|Accepted| SingleChat(💬 1:1 Chat Screen)
+    WaitAccept -->|Accepted| SingleChat(1:1 Chat Screen)
     WaitAccept -->|Declined| CD[1 Min Cooldown]
     
     Discovery -->|Taps Group Host| GroupHandshake{Group Handshake}
@@ -145,7 +145,7 @@ flowchart TD
     HostDialog -->|Host Rejects| Discovery
     HostDialog -->|Host Accepts| Lobby
     
-    Lobby -->|Host Clicks 'Start'| GroupChat(🗯️ Group Chat Screen)
+    Lobby -->|Host Clicks 'Start'| GroupChat(Group Chat Screen)
     
     style Home fill:#e3f2fd,stroke:#1e88e5,color:#000
     style HostingGroup fill:#fff9c4,stroke:#fbc02d,color:#000
@@ -156,7 +156,7 @@ flowchart TD
 ---
 
 ## Screenshots
-
+![Image](https://github.com/user-attachments/assets/0dc94767-0e8f-42b2-b3fe-f9a04a4c094f)
 
 ---
 
